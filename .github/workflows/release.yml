@@ -81,7 +81,7 @@ jobs:
           $installers = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like "*_$($version)_*-setup.exe" })
           if ($installers.Count -ne 1) { throw "Expected one Windows NSIS installer, found $($installers.Count)" }
           New-Item -ItemType Directory -Path release-assets -Force | Out-Null
-          Copy-Item $installers[0].FullName "release-assets/ChatGPT账号工具-711EV-$version-Windows-安装程序.exe"
+          Copy-Item $installers[0].FullName "release-assets/ChatGPT-711EV-$version-Windows-installer.exe"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -153,7 +153,7 @@ jobs:
           test -n "$installer"
           test "$(find "$bundle" -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = '1'
           mkdir -p release-assets
-          cp "$installer" "release-assets/ChatGPT账号工具-711EV-${version}-macOS-通用版.dmg"
+          cp "$installer" "release-assets/ChatGPT-711EV-${version}-macOS-universal.dmg"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -183,7 +183,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '2'
           test -f "release-assets/ChatGPT账号工具-711EV-${version}-Windows-安装程序.exe"
-          test -f "release-assets/ChatGPT账号工具-711EV-${version}-macOS-通用版.dmg"
+          test -f "release-assets/ChatGPT-711EV-${version}-macOS-universal.dmg"
 
       - name: Publish release
         shell: bash
@@ -202,8 +202,8 @@ jobs:
 
           ## 下载说明
 
-          - Windows：下载 ChatGPT账号工具-711EV-${version}-Windows-安装程序.exe。
-          - macOS：下载 ChatGPT账号工具-711EV-${version}-macOS-通用版.dmg，支持 Intel 和 Apple Silicon。
+          - Windows：下载 Windows 安装程序，安装后客户端名称为 ChatGPT账号工具-711EV。
+          - macOS：下载 ChatGPT-711EV-${version}-macOS-universal.dmg，支持 Intel 和 Apple Silicon。
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*
