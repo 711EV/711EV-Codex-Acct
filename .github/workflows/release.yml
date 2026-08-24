@@ -6,11 +6,11 @@ on:
       release_tag:
         description: Release tag
         required: true
-        default: v0.1.0
+        default: v1.0.0
       source_ref:
         description: Private source branch or tag
         required: true
-        default: master
+        default: v1.0.0
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRODUCT_NAME: 711EV-Acct
+  PRODUCT_NAME: ChatGPT账号工具-711EV
 
 jobs:
   build-windows:
@@ -81,7 +81,7 @@ jobs:
           $installers = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like "*_$($version)_*-setup.exe" })
           if ($installers.Count -ne 1) { throw "Expected one Windows NSIS installer, found $($installers.Count)" }
           New-Item -ItemType Directory -Path release-assets -Force | Out-Null
-          Copy-Item $installers[0].FullName "release-assets/711EV-Acct-$version-Windows-setup.exe"
+          Copy-Item $installers[0].FullName "release-assets/ChatGPT账号工具-711EV-$version-Windows-安装程序.exe"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -153,7 +153,7 @@ jobs:
           test -n "$installer"
           test "$(find "$bundle" -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = '1'
           mkdir -p release-assets
-          cp "$installer" "release-assets/711EV-Acct-${version}-macOS-universal.dmg"
+          cp "$installer" "release-assets/ChatGPT账号工具-711EV-${version}-macOS-通用版.dmg"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -182,8 +182,8 @@ jobs:
           set -euo pipefail
           version="${RELEASE_TAG#v}"
           test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '2'
-          test -f "release-assets/711EV-Acct-${version}-Windows-setup.exe"
-          test -f "release-assets/711EV-Acct-${version}-macOS-universal.dmg"
+          test -f "release-assets/ChatGPT账号工具-711EV-${version}-Windows-安装程序.exe"
+          test -f "release-assets/ChatGPT账号工具-711EV-${version}-macOS-通用版.dmg"
 
       - name: Publish release
         shell: bash
@@ -196,16 +196,18 @@ jobs:
           cat > release-notes.md <<EOF
           ## 本次更新
 
-          711EV-Acct ${version} 首次发布。
+          - 发布 ChatGPT账号工具-711EV ${version} 正式版本。
+          - 客户端、安装程序和快捷方式使用统一的中文展示名称。
+          - 更新黑色圆角客户端图标并放大中央 Logo。
 
           ## 下载说明
 
-          - Windows：下载 711EV-Acct-${version}-Windows-setup.exe 安装程序。本项目不发布 Windows 便携版。
-          - macOS：下载 711EV-Acct-${version}-macOS-universal.dmg，支持 Intel 和 Apple Silicon。
+          - Windows：下载 ChatGPT账号工具-711EV-${version}-Windows-安装程序.exe。
+          - macOS：下载 ChatGPT账号工具-711EV-${version}-macOS-通用版.dmg，支持 Intel 和 Apple Silicon。
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*
-            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "711EV-Acct $RELEASE_TAG" --notes-file release-notes.md --draft=false
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --draft=false
           else
-            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "711EV-Acct $RELEASE_TAG" --notes-file release-notes.md release-assets/*
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md release-assets/*
           fi
