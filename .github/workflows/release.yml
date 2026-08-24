@@ -149,10 +149,11 @@ jobs:
           set -euo pipefail
           version="${RELEASE_TAG#v}"
           bundle='source/desk/src-tauri/target/universal-apple-darwin/release/bundle/dmg'
-          mapfile -t installers < <(find "$bundle" -maxdepth 1 -type f -name '*.dmg')
-          test "${#installers[@]}" -eq 1
+          installer="$(find "$bundle" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          test -n "$installer"
+          test "$(find "$bundle" -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = '1'
           mkdir -p release-assets
-          cp "${installers[0]}" "release-assets/711EV-Acct-${version}-macOS-universal.dmg"
+          cp "$installer" "release-assets/711EV-Acct-${version}-macOS-universal.dmg"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -175,10 +176,14 @@ jobs:
 
       - name: Verify installers
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
+          version="${RELEASE_TAG#v}"
           test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '2'
-          test -f "release-assets/711EV-Acct-${{ inputs.release_tag }}-Windows-setup.exe" || test -f "release-assets/711EV-Acct-${{ inputs.release_tag#v }}-Windows-setup.exe"
+          test -f "release-assets/711EV-Acct-${version}-Windows-setup.exe"
+          test -f "release-assets/711EV-Acct-${version}-macOS-universal.dmg"
 
       - name: Publish release
         shell: bash
@@ -195,8 +200,8 @@ jobs:
 
           ## 下载说明
 
-          - Windows：下载 `711EV-Acct-${version}-Windows-setup.exe` 安装程序。本项目不发布 Windows 便携版。
-          - macOS：下载 `711EV-Acct-${version}-macOS-universal.dmg`，支持 Intel 和 Apple Silicon。
+          - Windows：下载 711EV-Acct-${version}-Windows-setup.exe 安装程序。本项目不发布 Windows 便携版。
+          - macOS：下载 711EV-Acct-${version}-macOS-universal.dmg，支持 Intel 和 Apple Silicon。
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*
