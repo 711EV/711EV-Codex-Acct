@@ -1,0 +1,206 @@
+name: Publish desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag
+        required: true
+        default: v0.1.0
+      source_ref:
+        description: Private source branch or tag
+        required: true
+        default: master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+env:
+  PRODUCT_NAME: 711EV-Acct
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout private source
+        shell: pwsh
+        env:
+          SOURCE_REPO_URL: ${{ secrets.SOURCE_REPO_URL }}
+          SOURCE_REPO_AUTH: ${{ secrets.SOURCE_REPO_AUTH }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          git -c "http.extraHeader=Authorization: Basic $env:SOURCE_REPO_AUTH" clone --depth 1 --single-branch --branch $env:SOURCE_REF $env:SOURCE_REPO_URL source
+
+      - name: Validate release version
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $version = (Get-Content source/desk/package.json | ConvertFrom-Json).version
+          if ($env:RELEASE_TAG -ne "v$version") {
+            throw "Release tag $env:RELEASE_TAG does not match package version $version"
+          }
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: source/desk/package-lock.json
+
+      - name: Use stable Rust
+        run: rustup default stable
+
+      - name: Install dependencies
+        working-directory: source/desk
+        run: npm ci
+
+      - name: Verify source
+        working-directory: source/desk
+        run: |
+          npm run icons
+          npm test
+          npm run check:rust
+
+      - name: Build Windows NSIS installer
+        working-directory: source/desk
+        run: npm exec tauri -- build --bundles nsis --config src-tauri/tauri.windows.conf.json
+
+      - name: Collect Windows installer
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $bundle = 'source/desk/src-tauri/target/release/bundle/nsis'
+          $installers = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like "*_$($version)_*-setup.exe" })
+          if ($installers.Count -ne 1) { throw "Expected one Windows NSIS installer, found $($installers.Count)" }
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+          Copy-Item $installers[0].FullName "release-assets/711EV-Acct-$version-Windows-setup.exe"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: release-assets/*
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS Universal DMG
+    runs-on: macos-14
+    steps:
+      - name: Checkout private source
+        shell: bash
+        env:
+          SOURCE_REPO_URL: ${{ secrets.SOURCE_REPO_URL }}
+          SOURCE_REPO_AUTH: ${{ secrets.SOURCE_REPO_AUTH }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          git -c "http.extraHeader=Authorization: Basic ${SOURCE_REPO_AUTH}" clone --depth 1 --single-branch --branch "$SOURCE_REF" "$SOURCE_REPO_URL" source
+
+      - name: Validate release version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./source/desk/package.json').version")"
+          test "$RELEASE_TAG" = "v$version"
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: source/desk/package-lock.json
+
+      - name: Use stable Rust
+        shell: bash
+        run: |
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Install dependencies
+        working-directory: source/desk
+        run: npm ci
+
+      - name: Verify source
+        working-directory: source/desk
+        run: |
+          npm run icons
+          npm test
+          npm run check:rust
+
+      - name: Build macOS Universal DMG
+        working-directory: source/desk
+        run: npm exec tauri -- build --target universal-apple-darwin --bundles dmg
+
+      - name: Collect macOS installer
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          bundle='source/desk/src-tauri/target/universal-apple-darwin/release/bundle/dmg'
+          mapfile -t installers < <(find "$bundle" -maxdepth 1 -type f -name '*.dmg')
+          test "${#installers[@]}" -eq 1
+          mkdir -p release-assets
+          cp "${installers[0]}" "release-assets/711EV-Acct-${version}-macOS-universal.dmg"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-installer'
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '2'
+          test -f "release-assets/711EV-Acct-${{ inputs.release_tag }}-Windows-setup.exe" || test -f "release-assets/711EV-Acct-${{ inputs.release_tag#v }}-Windows-setup.exe"
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          cat > release-notes.md <<EOF
+          ## 本次更新
+
+          711EV-Acct ${version} 首次发布。
+
+          ## 下载说明
+
+          - Windows：下载 `711EV-Acct-${version}-Windows-setup.exe` 安装程序。本项目不发布 Windows 便携版。
+          - macOS：下载 `711EV-Acct-${version}-macOS-universal.dmg`，支持 Intel 和 Apple Silicon。
+          EOF
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "711EV-Acct $RELEASE_TAG" --notes-file release-notes.md --draft=false
+          else
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "711EV-Acct $RELEASE_TAG" --notes-file release-notes.md release-assets/*
+          fi
