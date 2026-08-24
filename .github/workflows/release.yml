@@ -6,11 +6,11 @@ on:
       release_tag:
         description: Release tag
         required: true
-        default: v1.0.0
+        default: v1.1.0
       source_ref:
         description: Private source branch or tag
         required: true
-        default: v1.0.0
+        default: v1.1.0
 
 permissions:
   contents: write
@@ -36,14 +36,18 @@ jobs:
         run: |
           git -c "http.extraHeader=Authorization: Basic $env:SOURCE_REPO_AUTH" clone --depth 1 --single-branch --branch $env:SOURCE_REF $env:SOURCE_REPO_URL source
 
-      - name: Validate release version
+      - name: Validate release inputs
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           $version = (Get-Content source/desk/package.json | ConvertFrom-Json).version
           if ($env:RELEASE_TAG -ne "v$version") {
             throw "Release tag $env:RELEASE_TAG does not match package version $version"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'TAURI_SIGNING_PRIVATE_KEY is not configured'
           }
 
       - name: Use Node.js 20
@@ -67,11 +71,14 @@ jobs:
           npm test
           npm run check:rust
 
-      - name: Build Windows NSIS installer
+      - name: Build Windows NSIS installer and updater signature
         working-directory: source/desk
-        run: npm exec tauri -- build --bundles nsis --config src-tauri/tauri.windows.conf.json
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm exec tauri -- build --bundles nsis --config src-tauri/tauri.release.conf.json
 
-      - name: Collect Windows installer
+      - name: Collect Windows assets
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
@@ -80,8 +87,12 @@ jobs:
           $bundle = 'source/desk/src-tauri/target/release/bundle/nsis'
           $installers = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like "*_$($version)_*-setup.exe" })
           if ($installers.Count -ne 1) { throw "Expected one Windows NSIS installer, found $($installers.Count)" }
+          $signature = "$($installers[0].FullName).sig"
+          if (-not (Test-Path -LiteralPath $signature)) { throw 'Windows updater signature is missing' }
           New-Item -ItemType Directory -Path release-assets -Force | Out-Null
-          Copy-Item $installers[0].FullName "release-assets/ChatGPT-711EV-$version-Windows-installer.exe"
+          $installerName = "ChatGPT-711EV-$version-Windows-installer.exe"
+          Copy-Item $installers[0].FullName "release-assets/$installerName"
+          Copy-Item $signature "release-assets/$installerName.sig"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -91,7 +102,7 @@ jobs:
           if-no-files-found: error
 
   build-macos:
-    name: Build macOS Universal DMG
+    name: Build macOS Universal package
     runs-on: macos-14
     steps:
       - name: Checkout private source
@@ -104,14 +115,16 @@ jobs:
           set -euo pipefail
           git -c "http.extraHeader=Authorization: Basic ${SOURCE_REPO_AUTH}" clone --depth 1 --single-branch --branch "$SOURCE_REF" "$SOURCE_REPO_URL" source
 
-      - name: Validate release version
+      - name: Validate release inputs
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./source/desk/package.json').version")"
           test "$RELEASE_TAG" = "v$version"
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -137,23 +150,30 @@ jobs:
           npm test
           npm run check:rust
 
-      - name: Build macOS Universal DMG
+      - name: Build macOS Universal installer and updater package
         working-directory: source/desk
-        run: npm exec tauri -- build --target universal-apple-darwin --bundles dmg
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm exec tauri -- build --target universal-apple-darwin --bundles app,dmg --config src-tauri/tauri.release.conf.json
 
-      - name: Collect macOS installer
+      - name: Collect macOS assets
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
-          bundle='source/desk/src-tauri/target/universal-apple-darwin/release/bundle/dmg'
-          installer="$(find "$bundle" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
-          test -n "$installer"
-          test "$(find "$bundle" -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = '1'
+          bundle='source/desk/src-tauri/target/universal-apple-darwin/release/bundle'
+          dmg="$(find "$bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          updater="$(find "$bundle/macos" -maxdepth 1 -type f -name '*.app.tar.gz' -print -quit)"
+          test -n "$dmg"
+          test -n "$updater"
+          test -f "$updater.sig"
           mkdir -p release-assets
-          cp "$installer" "release-assets/ChatGPT-711EV-${version}-macOS-universal.dmg"
+          cp "$dmg" "release-assets/ChatGPT-711EV-${version}-macOS-universal.dmg"
+          cp "$updater" "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz"
+          cp "$updater.sig" "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz.sig"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -167,23 +187,35 @@ jobs:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - name: Download installers
+      - name: Checkout public release files
+        uses: actions/checkout@v4
+
+      - name: Download release assets
         uses: actions/download-artifact@v4
         with:
           pattern: '*-installer'
           path: release-assets
           merge-multiple: true
 
-      - name: Verify installers
+      - name: Create updater manifest
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: node .github/scripts/create-update-manifest.mjs release-assets "$GITHUB_REPOSITORY" "$RELEASE_TAG"
+
+      - name: Verify release assets
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
-          test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '2'
-          test -f "release-assets/ChatGPT账号工具-711EV-${version}-Windows-安装程序.exe"
+          test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '6'
+          test -f "release-assets/ChatGPT-711EV-${version}-Windows-installer.exe"
+          test -f "release-assets/ChatGPT-711EV-${version}-Windows-installer.exe.sig"
           test -f "release-assets/ChatGPT-711EV-${version}-macOS-universal.dmg"
+          test -f "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz"
+          test -f "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz.sig"
+          test -f 'release-assets/latest.json'
 
       - name: Publish release
         shell: bash
@@ -197,17 +229,17 @@ jobs:
           ## 本次更新
 
           - 发布 ChatGPT账号工具-711EV ${version} 正式版本。
-          - 客户端、安装程序和快捷方式使用统一的中文展示名称。
-          - 更新黑色圆角客户端图标并放大中央 Logo。
+          - 新增应用内检查更新、下载进度和签名安装。
+          - 新增明亮/暗黑主题、系统托盘和紧凑 DPI 自适应窗口。
 
           ## 下载说明
 
-          - Windows：下载 Windows 安装程序，安装后客户端名称为 ChatGPT账号工具-711EV。
+          - Windows：下载 ChatGPT-711EV-${version}-Windows-installer.exe 安装程序。
           - macOS：下载 ChatGPT-711EV-${version}-macOS-universal.dmg，支持 Intel 和 Apple Silicon。
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*
-            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --draft=false
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --draft=false --latest
           else
-            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md release-assets/*
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --latest release-assets/*
           fi
