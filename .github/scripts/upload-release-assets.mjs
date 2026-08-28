@@ -34,6 +34,10 @@ for (const fileName of localAssets) {
   if (!response.ok) {
     throw new Error(`上传 Release 附件失败（${response.status}）：${fileName} ${await response.text()}`);
   }
+  const uploaded = await response.json();
+  if (uploaded.name !== fileName) {
+    throw new Error(`GitHub 保存的附件名与预期不一致：预期 ${fileName}，实际 ${uploaded.name}`);
+  }
   console.log(`已上传：${fileName}`);
 }
 
