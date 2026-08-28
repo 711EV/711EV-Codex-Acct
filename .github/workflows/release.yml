@@ -34,7 +34,14 @@ jobs:
           SOURCE_REPO_AUTH: ${{ secrets.SOURCE_REPO_AUTH }}
           SOURCE_REF: ${{ inputs.source_ref }}
         run: |
-          git -c "http.extraHeader=Authorization: Bearer $env:SOURCE_REPO_AUTH" clone --depth 1 --single-branch --branch $env:SOURCE_REF $env:SOURCE_REPO_URL source
+          $env:GIT_TERMINAL_PROMPT = '0'
+          $cloneArgs = @('--depth', '1', '--single-branch', '--branch', $env:SOURCE_REF, $env:SOURCE_REPO_URL, 'source')
+          git -c "http.extraHeader=Authorization: Basic $env:SOURCE_REPO_AUTH" clone @cloneArgs
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path -LiteralPath 'source') { Remove-Item -LiteralPath 'source' -Recurse -Force }
+            git -c "http.extraHeader=Authorization: Bearer $env:SOURCE_REPO_AUTH" clone @cloneArgs
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to clone private source with Basic or Bearer authentication' }
 
       - name: Validate release inputs
         shell: pwsh
@@ -113,7 +120,12 @@ jobs:
           SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -euo pipefail
-          git -c "http.extraHeader=Authorization: Bearer ${SOURCE_REPO_AUTH}" clone --depth 1 --single-branch --branch "$SOURCE_REF" "$SOURCE_REPO_URL" source
+          clone_args=(--depth 1 --single-branch --branch "$SOURCE_REF" "$SOURCE_REPO_URL" source)
+          export GIT_TERMINAL_PROMPT=0
+          if ! git -c "http.extraHeader=Authorization: Basic ${SOURCE_REPO_AUTH}" clone "${clone_args[@]}"; then
+            rm -rf source
+            git -c "http.extraHeader=Authorization: Bearer ${SOURCE_REPO_AUTH}" clone "${clone_args[@]}"
+          fi
 
       - name: Validate release inputs
         shell: bash
