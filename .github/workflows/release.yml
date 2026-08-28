@@ -34,7 +34,7 @@ jobs:
           SOURCE_REPO_AUTH: ${{ secrets.SOURCE_REPO_AUTH }}
           SOURCE_REF: ${{ inputs.source_ref }}
         run: |
-          git -c "http.extraHeader=Authorization: Basic $env:SOURCE_REPO_AUTH" clone --depth 1 --single-branch --branch $env:SOURCE_REF $env:SOURCE_REPO_URL source
+          git -c "http.extraHeader=Authorization: Bearer $env:SOURCE_REPO_AUTH" clone --depth 1 --single-branch --branch $env:SOURCE_REF $env:SOURCE_REPO_URL source
 
       - name: Validate release inputs
         shell: pwsh
@@ -112,7 +112,7 @@ jobs:
           SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -euo pipefail
-          git -c "http.extraHeader=Authorization: Basic ${SOURCE_REPO_AUTH}" clone --depth 1 --single-branch --branch "$SOURCE_REF" "$SOURCE_REPO_URL" source
+          git -c "http.extraHeader=Authorization: Bearer ${SOURCE_REPO_AUTH}" clone --depth 1 --single-branch --branch "$SOURCE_REF" "$SOURCE_REPO_URL" source
 
       - name: Validate release inputs
         shell: bash
