@@ -51,7 +51,7 @@ jobs:
           }
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -94,7 +94,7 @@ jobs:
           Copy-Item $signature "release-assets/$installerName.sig"
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: windows-installer
           path: release-assets/*
@@ -126,7 +126,7 @@ jobs:
           test -n "$TAURI_SIGNING_PRIVATE_KEY"
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -174,7 +174,7 @@ jobs:
           cp "$updater.sig" "release-assets/ChatGPT账号工具-711EV-${version}-macOS端更新包.app.tar.gz.sig"
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: macos-installer
           path: release-assets/*
@@ -186,10 +186,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout public release files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download release assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           pattern: '*-installer'
           path: release-assets
