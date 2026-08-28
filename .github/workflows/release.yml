@@ -235,17 +235,8 @@ jobs:
           - Windows端：下载 ChatGPT账号工具-711EV-${version}-Windows端安装包.exe。
           - macOS端：下载 ChatGPT账号工具-711EV-${version}-macOS端安装包.dmg，支持 Intel 和 Apple Silicon。
           EOF
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            for old_asset in \
-              "ChatGPT-711EV-${version}-Windows-installer.exe" \
-              "ChatGPT-711EV-${version}-Windows-installer.exe.sig" \
-              "ChatGPT-711EV-${version}-macOS-universal.dmg" \
-              "ChatGPT-711EV-${version}-macOS-updater.app.tar.gz" \
-              "ChatGPT-711EV-${version}-macOS-updater.app.tar.gz.sig"; do
-              gh release delete-asset "$RELEASE_TAG" "$old_asset" --repo "$GITHUB_REPOSITORY" --yes >/dev/null 2>&1 || true
-            done
-            gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*
-            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --draft=false --latest
-          else
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --latest release-assets/*
           fi
+          node .github/scripts/upload-release-assets.mjs release-assets "$GITHUB_REPOSITORY" "$RELEASE_TAG"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --draft=false --latest
