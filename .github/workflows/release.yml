@@ -108,7 +108,7 @@ jobs:
           $signature = "$($installers[0].FullName).sig"
           if (-not (Test-Path -LiteralPath $signature)) { throw 'Windows updater signature is missing' }
           New-Item -ItemType Directory -Path release-assets -Force | Out-Null
-          $installerName = "ChatGPT账号工具-711EV-$version-Windows端安装包.exe"
+          $installerName = "ChatGPT-711EV-$version-Windows.exe"
           $signatureName = "ChatGPT-711EV-$version-Windows.exe.sig"
           Copy-Item $installers[0].FullName "release-assets/$installerName"
           Copy-Item $signature "release-assets/$signatureName"
@@ -210,7 +210,7 @@ jobs:
           test -n "$updater"
           test -f "$updater.sig"
           mkdir -p release-assets
-          cp "$dmg" "release-assets/ChatGPT账号工具-711EV-${version}-macOS端安装包.dmg"
+          cp "$dmg" "release-assets/ChatGPT-711EV-${version}-macOS.dmg"
           cp "$updater" "release-assets/ChatGPT-711EV-${version}-macOS.app.tar.gz"
           cp "$updater.sig" "release-assets/ChatGPT-711EV-${version}-macOS.app.tar.gz.sig"
 
@@ -254,9 +254,9 @@ jobs:
           set -euo pipefail
           version="${RELEASE_TAG#v}"
           test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '6'
-          test -f "release-assets/ChatGPT账号工具-711EV-${version}-Windows端安装包.exe"
+          test -f "release-assets/ChatGPT-711EV-${version}-Windows.exe"
           test -f "release-assets/ChatGPT-711EV-${version}-Windows.exe.sig"
-          test -f "release-assets/ChatGPT账号工具-711EV-${version}-macOS端安装包.dmg"
+          test -f "release-assets/ChatGPT-711EV-${version}-macOS.dmg"
           test -f "release-assets/ChatGPT-711EV-${version}-macOS.app.tar.gz"
           test -f "release-assets/ChatGPT-711EV-${version}-macOS.app.tar.gz.sig"
           test -f 'release-assets/latest.json'

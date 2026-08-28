@@ -18,6 +18,12 @@ const apiBase = `https://api.github.com/repos/${repository}`;
 const release = await githubRequest(`${apiBase}/releases/tags/${encodeURIComponent(releaseTag)}`);
 const assets = await githubRequest(`${apiBase}/releases/${release.id}/assets?per_page=100`);
 
+const version = releaseTag.slice(1);
+const labels = new Map([
+  [`ChatGPT-711EV-${version}-Windows.exe`, `ChatGPT账号工具-711EV-${version}-Windows端安装包.exe`],
+  [`ChatGPT-711EV-${version}-macOS.dmg`, `ChatGPT账号工具-711EV-${version}-macOS端安装包.dmg`],
+]);
+
 for (const asset of assets) {
   await githubRequest(`${apiBase}/releases/assets/${asset.id}`, { method: "DELETE" });
 }
@@ -25,7 +31,10 @@ for (const asset of assets) {
 const localAssets = (await readFileList(assetDirectory)).sort();
 for (const fileName of localAssets) {
   const content = await readFile(path.join(assetDirectory, fileName));
-  const uploadUrl = `https://uploads.github.com/repos/${repository}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`;
+  const label = labels.get(fileName);
+  const query = new URLSearchParams({ name: fileName });
+  if (label) query.set("label", label);
+  const uploadUrl = `https://uploads.github.com/repos/${repository}/releases/${release.id}/assets?${query}`;
   const response = await fetch(uploadUrl, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/octet-stream" },
@@ -37,6 +46,9 @@ for (const fileName of localAssets) {
   const uploaded = await response.json();
   if (uploaded.name !== fileName) {
     throw new Error(`GitHub 保存的附件名与预期不一致：预期 ${fileName}，实际 ${uploaded.name}`);
+  }
+  if (label && uploaded.label !== label) {
+    throw new Error(`GitHub 保存的显示标签与预期不一致：预期 ${label}，实际 ${uploaded.label ?? "无"}`);
   }
   console.log(`已上传：${fileName}`);
 }

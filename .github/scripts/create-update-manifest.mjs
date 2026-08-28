@@ -8,7 +8,7 @@ if (!assetDirectory || !repository || !/^v\d+\.\d+\.\d+$/.test(releaseTag ?? "")
 }
 
 const version = releaseTag.slice(1);
-const windowsName = `ChatGPT账号工具-711EV-${version}-Windows端安装包.exe`;
+const windowsName = `ChatGPT-711EV-${version}-Windows.exe`;
 const windowsSignatureName = `ChatGPT-711EV-${version}-Windows.exe.sig`;
 const macUpdaterName = `ChatGPT-711EV-${version}-macOS.app.tar.gz`;
 const macSignatureName = `${macUpdaterName}.sig`;
