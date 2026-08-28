@@ -34,14 +34,26 @@ jobs:
           SOURCE_REPO_AUTH: ${{ secrets.SOURCE_REPO_AUTH }}
           SOURCE_REF: ${{ inputs.source_ref }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:SOURCE_REPO_URL)) { throw 'SOURCE_REPO_URL is not configured' }
+          if ([string]::IsNullOrWhiteSpace($env:SOURCE_REPO_AUTH)) { throw 'SOURCE_REPO_AUTH is not configured' }
           $env:GIT_TERMINAL_PROMPT = '0'
           $cloneArgs = @('--depth', '1', '--single-branch', '--branch', $env:SOURCE_REF, $env:SOURCE_REPO_URL, 'source')
-          git -c "http.extraHeader=Authorization: Basic $env:SOURCE_REPO_AUTH" clone @cloneArgs
-          if ($LASTEXITCODE -ne 0) {
+          $basicFromToken = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("OAUTH_USER:$env:SOURCE_REPO_AUTH"))
+          $authHeaders = @(
+            "Basic $env:SOURCE_REPO_AUTH",
+            "Bearer $env:SOURCE_REPO_AUTH",
+            "Basic $basicFromToken"
+          )
+          $cloned = $false
+          foreach ($authHeader in $authHeaders) {
             if (Test-Path -LiteralPath 'source') { Remove-Item -LiteralPath 'source' -Recurse -Force }
-            git -c "http.extraHeader=Authorization: Bearer $env:SOURCE_REPO_AUTH" clone @cloneArgs
+            git -c "http.extraHeader=Authorization: $authHeader" clone @cloneArgs
+            if ($LASTEXITCODE -eq 0) {
+              $cloned = $true
+              break
+            }
           }
-          if ($LASTEXITCODE -ne 0) { throw 'Unable to clone private source with Basic or Bearer authentication' }
+          if (-not $cloned) { throw 'Unable to clone private source with configured authentication formats' }
 
       - name: Validate release inputs
         shell: pwsh
@@ -120,11 +132,27 @@ jobs:
           SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -euo pipefail
+          test -n "${SOURCE_REPO_URL// }" || { echo 'SOURCE_REPO_URL is not configured' >&2; exit 1; }
+          test -n "${SOURCE_REPO_AUTH// }" || { echo 'SOURCE_REPO_AUTH is not configured' >&2; exit 1; }
           clone_args=(--depth 1 --single-branch --branch "$SOURCE_REF" "$SOURCE_REPO_URL" source)
           export GIT_TERMINAL_PROMPT=0
-          if ! git -c "http.extraHeader=Authorization: Basic ${SOURCE_REPO_AUTH}" clone "${clone_args[@]}"; then
+          basic_from_token="$(printf 'OAUTH_USER:%s' "$SOURCE_REPO_AUTH" | base64 | tr -d '\n')"
+          auth_headers=(
+            "Basic ${SOURCE_REPO_AUTH}"
+            "Bearer ${SOURCE_REPO_AUTH}"
+            "Basic ${basic_from_token}"
+          )
+          cloned=false
+          for auth_header in "${auth_headers[@]}"; do
             rm -rf source
-            git -c "http.extraHeader=Authorization: Bearer ${SOURCE_REPO_AUTH}" clone "${clone_args[@]}"
+            if git -c "http.extraHeader=Authorization: ${auth_header}" clone "${clone_args[@]}"; then
+              cloned=true
+              break
+            fi
+          done
+          if [[ "$cloned" != true ]]; then
+            echo 'Unable to clone private source with configured authentication formats' >&2
+            exit 1
           fi
 
       - name: Validate release inputs
