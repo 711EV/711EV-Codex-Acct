@@ -50,10 +50,10 @@ jobs:
             throw 'TAURI_SIGNING_PRIVATE_KEY is not configured'
           }
 
-      - name: Use Node.js 20
+      - name: Use Node.js 24
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: source/desk/package-lock.json
 
@@ -94,7 +94,7 @@ jobs:
           Copy-Item $signature "release-assets/$installerName.sig"
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: windows-installer
           path: release-assets/*
@@ -125,10 +125,10 @@ jobs:
           test "$RELEASE_TAG" = "v$version"
           test -n "$TAURI_SIGNING_PRIVATE_KEY"
 
-      - name: Use Node.js 20
+      - name: Use Node.js 24
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: source/desk/package-lock.json
 
@@ -174,7 +174,7 @@ jobs:
           cp "$updater.sig" "release-assets/ChatGPT账号工具-711EV-${version}-macOS端更新包.app.tar.gz.sig"
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: macos-installer
           path: release-assets/*
@@ -188,8 +188,13 @@ jobs:
       - name: Checkout public release files
         uses: actions/checkout@v5
 
+      - name: Use Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
       - name: Download release assets
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: '*-installer'
           path: release-assets
