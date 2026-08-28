@@ -67,7 +67,6 @@ jobs:
       - name: Verify source
         working-directory: source/desk
         run: |
-          npm run icons
           npm test
           npm run check:rust
 
@@ -146,7 +145,6 @@ jobs:
       - name: Verify source
         working-directory: source/desk
         run: |
-          npm run icons
           npm test
           npm run check:rust
 
