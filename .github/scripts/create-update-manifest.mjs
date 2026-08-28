@@ -8,8 +8,8 @@ if (!assetDirectory || !repository || !/^v\d+\.\d+\.\d+$/.test(releaseTag ?? "")
 }
 
 const version = releaseTag.slice(1);
-const windowsName = `ChatGPT-711EV-${version}-Windows-installer.exe`;
-const macUpdaterName = `ChatGPT-711EV-${version}-macOS-updater.app.tar.gz`;
+const windowsName = `ChatGPT账号工具-711EV-${version}-Windows端安装包.exe`;
+const macUpdaterName = `ChatGPT账号工具-711EV-${version}-macOS端更新包.app.tar.gz`;
 const windowsSignature = await signature(`${windowsName}.sig`);
 const macSignature = await signature(`${macUpdaterName}.sig`);
 const releaseBase = `https://github.com/${repository}/releases/download/${releaseTag}`;
@@ -21,15 +21,15 @@ const manifest = {
   platforms: {
     "windows-x86_64": {
       signature: windowsSignature,
-      url: `${releaseBase}/${windowsName}`,
+      url: `${releaseBase}/${encodeURIComponent(windowsName)}`,
     },
     "darwin-x86_64": {
       signature: macSignature,
-      url: `${releaseBase}/${macUpdaterName}`,
+      url: `${releaseBase}/${encodeURIComponent(macUpdaterName)}`,
     },
     "darwin-aarch64": {
       signature: macSignature,
-      url: `${releaseBase}/${macUpdaterName}`,
+      url: `${releaseBase}/${encodeURIComponent(macUpdaterName)}`,
     },
   },
 };

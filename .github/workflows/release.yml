@@ -62,7 +62,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: source/desk
-        run: npm ci
+        run: npm ci --cache "$env:RUNNER_TEMP/npm-cache"
 
       - name: Verify source
         working-directory: source/desk
@@ -89,7 +89,7 @@ jobs:
           $signature = "$($installers[0].FullName).sig"
           if (-not (Test-Path -LiteralPath $signature)) { throw 'Windows updater signature is missing' }
           New-Item -ItemType Directory -Path release-assets -Force | Out-Null
-          $installerName = "ChatGPT-711EV-$version-Windows-installer.exe"
+          $installerName = "ChatGPT账号工具-711EV-$version-Windows端安装包.exe"
           Copy-Item $installers[0].FullName "release-assets/$installerName"
           Copy-Item $signature "release-assets/$installerName.sig"
 
@@ -140,7 +140,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: source/desk
-        run: npm ci
+        run: npm ci --cache "$RUNNER_TEMP/npm-cache"
 
       - name: Verify source
         working-directory: source/desk
@@ -169,9 +169,9 @@ jobs:
           test -n "$updater"
           test -f "$updater.sig"
           mkdir -p release-assets
-          cp "$dmg" "release-assets/ChatGPT-711EV-${version}-macOS-universal.dmg"
-          cp "$updater" "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz"
-          cp "$updater.sig" "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz.sig"
+          cp "$dmg" "release-assets/ChatGPT账号工具-711EV-${version}-macOS端安装包.dmg"
+          cp "$updater" "release-assets/ChatGPT账号工具-711EV-${version}-macOS端更新包.app.tar.gz"
+          cp "$updater.sig" "release-assets/ChatGPT账号工具-711EV-${version}-macOS端更新包.app.tar.gz.sig"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -208,11 +208,11 @@ jobs:
           set -euo pipefail
           version="${RELEASE_TAG#v}"
           test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = '6'
-          test -f "release-assets/ChatGPT-711EV-${version}-Windows-installer.exe"
-          test -f "release-assets/ChatGPT-711EV-${version}-Windows-installer.exe.sig"
-          test -f "release-assets/ChatGPT-711EV-${version}-macOS-universal.dmg"
-          test -f "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz"
-          test -f "release-assets/ChatGPT-711EV-${version}-macOS-updater.app.tar.gz.sig"
+          test -f "release-assets/ChatGPT账号工具-711EV-${version}-Windows端安装包.exe"
+          test -f "release-assets/ChatGPT账号工具-711EV-${version}-Windows端安装包.exe.sig"
+          test -f "release-assets/ChatGPT账号工具-711EV-${version}-macOS端安装包.dmg"
+          test -f "release-assets/ChatGPT账号工具-711EV-${version}-macOS端更新包.app.tar.gz"
+          test -f "release-assets/ChatGPT账号工具-711EV-${version}-macOS端更新包.app.tar.gz.sig"
           test -f 'release-assets/latest.json'
 
       - name: Publish release
@@ -232,10 +232,18 @@ jobs:
 
           ## 下载说明
 
-          - Windows：下载 ChatGPT-711EV-${version}-Windows-installer.exe 安装程序。
-          - macOS：下载 ChatGPT-711EV-${version}-macOS-universal.dmg，支持 Intel 和 Apple Silicon。
+          - Windows端：下载 ChatGPT账号工具-711EV-${version}-Windows端安装包.exe。
+          - macOS端：下载 ChatGPT账号工具-711EV-${version}-macOS端安装包.dmg，支持 Intel 和 Apple Silicon。
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            for old_asset in \
+              "ChatGPT-711EV-${version}-Windows-installer.exe" \
+              "ChatGPT-711EV-${version}-Windows-installer.exe.sig" \
+              "ChatGPT-711EV-${version}-macOS-universal.dmg" \
+              "ChatGPT-711EV-${version}-macOS-updater.app.tar.gz" \
+              "ChatGPT-711EV-${version}-macOS-updater.app.tar.gz.sig"; do
+              gh release delete-asset "$RELEASE_TAG" "$old_asset" --repo "$GITHUB_REPOSITORY" --yes >/dev/null 2>&1 || true
+            done
             gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "ChatGPT账号工具-711EV" --notes-file release-notes.md --draft=false --latest
           else
