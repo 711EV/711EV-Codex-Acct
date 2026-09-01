@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 import process from "node:process";
 
@@ -15,10 +16,11 @@ const macSignatureName = `${macUpdaterName}.sig`;
 const windowsSignature = await signature(windowsSignatureName);
 const macSignature = await signature(macSignatureName);
 const releaseBase = `https://github.com/${repository}/releases/download/${releaseTag}`;
+const notes = await releaseNotes(releaseTag, version);
 
 const manifest = {
   version,
-  notes: `ChatGPT账号工具-711EV ${version} 正式版本`,
+  notes,
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": {
@@ -46,4 +48,16 @@ async function signature(fileName) {
   const value = (await readFile(path.join(assetDirectory, fileName), "utf8")).trim();
   if (!value) throw new Error(`Signature is empty: ${fileName}`);
   return value;
+}
+
+async function releaseNotes(tag, releaseVersion) {
+  const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const notesPath = path.join(scriptDirectory, "..", "release-notes", `${tag}.txt`);
+  try {
+    const value = (await readFile(notesPath, "utf8")).trim();
+    if (value) return value;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  return `ChatGPT账号工具-711EV ${releaseVersion} 正式版本`;
 }
