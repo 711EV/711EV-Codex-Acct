@@ -269,11 +269,16 @@ jobs:
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
+          release_detail="ChatGPT账号工具-711EV ${version} 正式版本。"
+          release_notes_path=".github/release-notes/${RELEASE_TAG}.txt"
+          if [[ -f "$release_notes_path" ]]; then
+            release_detail="$(cat "$release_notes_path")"
+          fi
           cat > release-notes.md <<EOF
           ## 本次更新
 
           - 发布 ChatGPT账号工具-711EV ${version} 正式版本。
-          - 优化额度重置：周额度剩余不超过 1% 时可重置，并改进按钮资格与并发状态判断。
+          - ${release_detail}
           - 新增应用内检查更新、下载进度和签名安装。
           - 新增明亮/暗黑主题、系统托盘和紧凑 DPI 自适应窗口。
 
